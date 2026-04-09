@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0a">
+<title>Card Wallet</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#0a0a0a;--surface:#141414;--surface2:#1e1e1e;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#f0f0f0;--muted:#888;--accent:#e8ff4d;--accent-dark:#b8cc30;
+  --radius:18px;--radius-sm:10px;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;width:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;overflow:hidden;overscroll-behavior:none;}
+#app{height:100dvh;display:flex;flex-direction:column;max-width:480px;margin:0 auto;position:relative;overflow:hidden;}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity 0.25s ease,transform 0.3s cubic-bezier(0.4,0,0.2,1);}
+.screen.active{opacity:1;pointer-events:all;}
+#home{background:var(--bg);}
+.home-header{padding:calc(var(--safe-top) + 20px) 24px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.home-header h1{font-size:26px;font-weight:600;letter-spacing:-0.5px;}
+.add-btn{width:40px;height:40px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.15s,background 0.15s;flex-shrink:0;}
+.add-btn:active{transform:scale(0.92);background:var(--accent-dark);}
+.add-btn svg{width:20px;height:20px;color:#0a0a0a;}
+.card-count{padding:0 24px 20px;font-size:13px;color:var(--muted);flex-shrink:0;}
+.cards-scroll{flex:1;overflow-y:auto;padding:0 20px calc(var(--safe-bottom) + 20px);display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch;}
+.cards-scroll::-webkit-scrollbar{display:none;}
+.card-tile{border-radius:var(--radius);padding:20px 22px;cursor:pointer;position:relative;overflow:hidden;transition:transform 0.15s,opacity 0.15s;min-height:110px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid rgba(255,255,255,0.06);}
+.card-tile:active{transform:scale(0.97);opacity:0.9;}
+.card-tile-top{display:flex;align-items:flex-start;justify-content:space-between;}
+.card-tile-name{font-size:20px;font-weight:600;letter-spacing:-0.3px;}
+.card-tile-label{font-size:11px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;opacity:0.65;margin-top:3px;}
+.card-delete-btn{width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.25);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s;flex-shrink:0;}
+.card-tile:hover .card-delete-btn,.card-tile.show-delete .card-delete-btn{opacity:1;}
+.card-tile-num{font-family:'DM Mono',monospace;font-size:12px;opacity:0.6;letter-spacing:0.12em;}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px 24px;}
+.empty-icon{width:64px;height:64px;border-radius:20px;background:var(--surface);display:flex;align-items:center;justify-content:center;border:1px solid var(--border);}
+.empty-state p{font-size:15px;color:var(--muted);text-align:center;line-height:1.5;}
+
+/* ADD SCREEN */
+#add-screen{background:var(--bg);transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1),opacity 0s 0.35s;opacity:1;pointer-events:none;}
+#add-screen.active{transform:translateY(0);opacity:1;pointer-events:all;transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);}
+.add-header{padding:calc(var(--safe-top) + 20px) 24px 0;display:flex;align-items:center;gap:16px;flex-shrink:0;}
+.back-btn{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;flex-shrink:0;}
+.back-btn:active{background:var(--surface2);}
+.add-header h2{font-size:20px;font-weight:600;letter-spacing:-0.3px;}
+.add-form{flex:1;overflow-y:auto;padding:24px 24px calc(var(--safe-bottom) + 24px);display:flex;flex-direction:column;gap:20px;-webkit-overflow-scrolling:touch;}
+.add-form::-webkit-scrollbar{display:none;}
+.field-group{display:flex;flex-direction:column;gap:8px;}
+.field-label{font-size:13px;color:var(--muted);font-weight:500;}
+.field-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;font-size:16px;color:var(--text);font-family:'DM Sans',sans-serif;width:100%;outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
+.field-input:focus{border-color:var(--accent);}
+.field-input::placeholder{color:#555;}
+.num-field-wrap{position:relative;}
+.num-field-wrap .field-input{padding-right:52px;}
+.scan-inline-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s,transform 0.1s;}
+.scan-inline-btn:active{background:var(--accent-dark);transform:translateY(-50%) scale(0.92);}
+.scan-inline-btn svg{width:18px;height:18px;color:#0a0a0a;}
+.color-picker{display:flex;gap:10px;flex-wrap:wrap;}
+.color-opt{width:36px;height:36px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:transform 0.15s,border-color 0.15s;flex-shrink:0;}
+.color-opt.selected{border-color:white;transform:scale(1.12);}
+.preview-card{border-radius:var(--radius);padding:22px;min-height:100px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid rgba(255,255,255,0.06);transition:background 0.3s;}
+.preview-card-name{font-size:22px;font-weight:600;letter-spacing:-0.3px;}
+.preview-card-label{font-size:11px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;opacity:0.65;margin-top:3px;}
+.preview-card-num{font-family:'DM Mono',monospace;font-size:12px;opacity:0.6;letter-spacing:0.1em;margin-top:12px;}
+.save-btn{background:var(--accent);color:#0a0a0a;border:none;border-radius:var(--radius-sm);padding:16px;font-size:16px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;width:100%;transition:background 0.15s,transform 0.1s;margin-top:4px;}
+.save-btn:active{background:var(--accent-dark);transform:scale(0.98);}
+.save-btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+
+/* SCANNER */
+#scanner-screen{background:#000;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1),opacity 0s 0.35s;opacity:1;pointer-events:none;}
+#scanner-screen.active{transform:translateY(0);opacity:1;pointer-events:all;transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);}
+.scanner-header{padding:calc(var(--safe-top) + 20px) 24px 0;display:flex;align-items:center;gap:16px;flex-shrink:0;position:relative;z-index:10;}
+.scanner-header h2{font-size:20px;font-weight:600;letter-spacing:-0.3px;}
+.scanner-wrap{flex:1;position:relative;overflow:hidden;}
+#scanner-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+#scanner-canvas{display:none;}
+.scanner-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
+.scanner-frame{width:260px;height:160px;position:relative;}
+.scanner-frame::before,.scanner-frame::after{content:'';position:absolute;width:32px;height:32px;border-color:var(--accent);border-style:solid;}
+.scanner-frame::before{top:0;left:0;border-width:3px 0 0 3px;border-radius:4px 0 0 0;}
+.scanner-frame::after{bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 4px 0;}
+.scanner-corner-tr,.scanner-corner-bl{position:absolute;width:32px;height:32px;border-color:var(--accent);border-style:solid;}
+.scanner-corner-tr{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 4px 0 0;}
+.scanner-corner-bl{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 4px;}
+.scanner-line{position:absolute;left:0;right:0;height:2px;background:var(--accent);opacity:0.85;animation:scanline 2s ease-in-out infinite;}
+@keyframes scanline{0%{top:10%;}50%{top:85%;}100%{top:10%;}}
+.scanner-hint{margin-top:28px;font-size:14px;color:rgba(255,255,255,0.65);text-align:center;padding:0 40px;line-height:1.5;}
+.scanner-status-bar{position:absolute;bottom:calc(var(--safe-bottom) + 32px);left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.12);color:var(--text);padding:10px 20px;border-radius:100px;font-size:13px;white-space:nowrap;text-align:center;max-width:90%;}
+.scanner-flash{position:absolute;inset:0;background:rgba(232,255,77,0.25);opacity:0;pointer-events:none;transition:opacity 0.1s;}
+.scanner-flash.flash{opacity:1;}
+
+/* BARCODE VIEWER */
+#barcode-screen{background:var(--bg);transform:translateX(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),opacity 0s 0.3s;opacity:1;pointer-events:none;}
+#barcode-screen.active{transform:translateX(0);opacity:1;pointer-events:all;transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);}
+.barcode-header{padding:calc(var(--safe-top) + 20px) 24px 0;display:flex;align-items:center;gap:16px;flex-shrink:0;}
+.barcode-content{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:24px;}
+.barcode-card-name{font-size:28px;font-weight:600;letter-spacing:-0.5px;text-align:center;}
+.barcode-card-label{font-size:13px;color:var(--muted);margin-top:4px;text-align:center;}
+.barcode-box{background:#fff;border-radius:var(--radius);padding:24px 20px 20px;width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:14px;}
+#barcode-svg{width:100%;max-height:100px;}
+.barcode-number{font-family:'DM Mono',monospace;font-size:14px;color:#333;letter-spacing:0.12em;}
+.hint-text{font-size:13px;color:var(--muted);text-align:center;line-height:1.5;}
+#toast{position:absolute;bottom:calc(var(--safe-bottom) + 20px);left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface2);color:var(--text);padding:12px 20px;border-radius:100px;font-size:14px;font-weight:500;white-space:nowrap;border:1px solid var(--border2);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);z-index:100;pointer-events:none;}
+#toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <div id="home" class="screen active">
+    <div class="home-header">
+      <h1>My cards</h1>
+      <button class="add-btn" onclick="showAdd()" aria-label="Add card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="card-count" id="card-count">0 cards</div>
+    <div id="cards-list" class="cards-scroll"></div>
+    <div id="empty-state" class="empty-state">
+      <div class="empty-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/>
+        </svg>
+      </div>
+      <p>No cards yet.<br>Tap <strong>+</strong> to add your first loyalty card.</p>
+    </div>
+  </div>
+
+  <!-- ADD CARD -->
+  <div id="add-screen" class="screen">
+    <div class="add-header">
+      <button class="back-btn" onclick="hideAdd()" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <h2>Add card</h2>
+    </div>
+    <div class="add-form">
+      <div style="font-size:13px;color:var(--muted);line-height:1.5;">Enter a store name, then scan the barcode on your physical card — or type the number manually.</div>
+      <div class="field-group">
+        <label class="field-label">Store name</label>
+        <input class="field-input" id="inp-name" type="text" placeholder="e.g. Rimi, Maxima, Lidl…" oninput="updatePreview()" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Card number</label>
+        <div class="num-field-wrap">
+          <input class="field-input" id="inp-num" type="text" placeholder="Type or scan barcode…" oninput="updatePreview()" autocomplete="off" inputmode="text">
+          <button class="scan-inline-btn" onclick="showScanner()" aria-label="Scan barcode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+              <line x1="8" y1="12" x2="8" y2="12.01"/><line x1="12" y1="8" x2="12" y2="16"/>
+              <line x1="16" y1="12" x2="16" y2="12.01"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="10" x2="14" y2="14"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Card color</label>
+        <div class="color-picker" id="color-picker"></div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Preview</label>
+        <div class="preview-card" id="preview-card">
+          <div>
+            <div class="preview-card-name" id="preview-name">Store name</div>
+            <div class="preview-card-label">Loyalty card</div>
+          </div>
+          <div class="preview-card-num" id="preview-num">— — — —</div>
+        </div>
+      </div>
+      <button class="save-btn" id="save-btn" onclick="saveCard()" disabled>Save card</button>
+    </div>
+  </div>
+
+  <!-- SCANNER -->
+  <div id="scanner-screen" class="screen">
+    <div class="scanner-header">
+      <button class="back-btn" onclick="hideScanner()" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <h2>Scan barcode</h2>
+    </div>
+    <div class="scanner-wrap">
+      <video id="scanner-video" playsinline muted autoplay></video>
+      <canvas id="scanner-canvas"></canvas>
+      <div class="scanner-overlay">
+        <div class="scanner-frame">
+          <div class="scanner-corner-tr"></div>
+          <div class="scanner-corner-bl"></div>
+          <div class="scanner-line"></div>
+        </div>
+        <div class="scanner-hint">Point at the barcode on<br>the back of your loyalty card</div>
+      </div>
+      <div class="scanner-flash" id="scan-flash"></div>
+      <div class="scanner-status-bar" id="scanner-status">Starting camera…</div>
+    </div>
+  </div>
+
+  <!-- BARCODE VIEWER -->
+  <div id="barcode-screen" class="screen">
+    <div class="barcode-header">
+      <button class="back-btn" onclick="hideBarcode()" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <div class="barcode-content">
+      <div>
+        <div class="barcode-card-name" id="bc-name"></div>
+        <div class="barcode-card-label">Loyalty card</div>
+      </div>
+      <div class="barcode-box">
+        <svg id="barcode-svg"></svg>
+        <div class="barcode-number" id="bc-num"></div>
+      </div>
+      <div class="hint-text">Hold up to the scanner at checkout</div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+const COLORS=[
+  {bg:'#2a3a1e',text:'#a8d870',label:'Forest'},
+  {bg:'#1a2a3a',text:'#70a8d8',label:'Ocean'},
+  {bg:'#3a1a1a',text:'#d87070',label:'Crimson'},
+  {bg:'#2a1a3a',text:'#a870d8',label:'Plum'},
+  {bg:'#3a2a10',text:'#d8a870',label:'Amber'},
+  {bg:'#1a3a35',text:'#70d8c8',label:'Teal'},
+  {bg:'#3a3a1a',text:'#d8d870',label:'Lime'},
+  {bg:'#2e2e2e',text:'#c0c0c0',label:'Steel'},
+];
+let cards=JSON.parse(localStorage.getItem('wallet_cards')||'[]');
+let selectedColor=0;
+let videoStream=null;
+let scanLoop=null;
+let scannerRunning=false;
+let detector=null;
+
+function saveData(){localStorage.setItem('wallet_cards',JSON.stringify(cards));}
+function formatNum(n){const c=n.replace(/\s/g,'');return c.match(/.{1,4}/g)?.join(' ')||n;}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderCards(){
+  const list=document.getElementById('cards-list');
+  const empty=document.getElementById('empty-state');
+  const count=document.getElementById('card-count');
+  count.textContent=cards.length===1?'1 card':`${cards.length} cards`;
+  if(cards.length===0){list.style.display='none';empty.style.display='flex';return;}
+  list.style.display='flex';empty.style.display='none';
+  list.innerHTML=cards.map((c,i)=>{
+    const col=COLORS[c.colorIdx]||COLORS[0];
+    return `<div class="card-tile" style="background:${col.bg};color:${col.text};"
+      onclick="openBarcode(${i})"
+      oncontextmenu="event.preventDefault();this.classList.toggle('show-delete')">
+      <div class="card-tile-top">
+        <div>
+          <div class="card-tile-name">${escHtml(c.name)}</div>
+          <div class="card-tile-label">Loyalty card</div>
+        </div>
+        <button class="card-delete-btn" onclick="event.stopPropagation();deleteCard(${i})" aria-label="Delete">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="card-tile-num">${escHtml(formatNum(c.number))}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildColorPicker(){
+  document.getElementById('color-picker').innerHTML=COLORS.map((c,i)=>`
+    <div class="color-opt${i===selectedColor?' selected':''}"
+      style="background:${c.bg};border-color:${i===selectedColor?'white':'transparent'};"
+      onclick="selectColor(${i})" title="${c.label}"></div>`).join('');
+}
+function selectColor(i){selectedColor=i;buildColorPicker();updatePreview();}
+
+function updatePreview(){
+  const name=document.getElementById('inp-name').value.trim()||'Store name';
+  const num=document.getElementById('inp-num').value.trim()||'— — — —';
+  const col=COLORS[selectedColor];
+  const p=document.getElementById('preview-card');
+  p.style.background=col.bg;p.style.color=col.text;
+  document.getElementById('preview-name').textContent=name;
+  document.getElementById('preview-num').textContent=formatNum(num);
+  const ok=document.getElementById('inp-name').value.trim().length>0&&document.getElementById('inp-num').value.trim().length>0;
+  document.getElementById('save-btn').disabled=!ok;
+}
+
+function showAdd(){
+  document.getElementById('inp-name').value='';
+  document.getElementById('inp-num').value='';
+  selectedColor=0;buildColorPicker();updatePreview();
+  document.getElementById('add-screen').classList.add('active');
+  setTimeout(()=>document.getElementById('inp-name').focus(),350);
+}
+function hideAdd(){document.getElementById('add-screen').classList.remove('active');}
+
+function saveCard(){
+  const name=document.getElementById('inp-name').value.trim();
+  const number=document.getElementById('inp-num').value.trim().replace(/\s/g,'');
+  if(!name||!number)return;
+  cards.push({name,number,colorIdx:selectedColor});
+  saveData();renderCards();hideAdd();
+  showToast(`"${name}" added`);
+}
+function deleteCard(i){
+  const name=cards[i].name;
+  cards.splice(i,1);saveData();renderCards();
+  showToast(`"${name}" removed`);
+}
+
+/* ---- SCANNER ---- */
+async function showScanner(){
+  document.getElementById('scanner-screen').classList.add('active');
+  document.getElementById('scanner-status').textContent='Starting camera…';
+  await startCamera();
+}
+
+function hideScanner(){
+  stopCamera();
+  document.getElementById('scanner-screen').classList.remove('active');
+}
+
+async function startCamera(){
+  if(scannerRunning)return;
+  try{
+    const constraints={
+      video:{
+        facingMode:{ideal:'environment'},
+        width:{ideal:1280},
+        height:{ideal:720}
+      }
+    };
+    videoStream=await navigator.mediaDevices.getUserMedia(constraints);
+    const video=document.getElementById('scanner-video');
+    video.srcObject=videoStream;
+    video.setAttribute('playsinline','');
+    await video.play();
+    scannerRunning=true;
+    document.getElementById('scanner-status').textContent='Scanning…';
+
+    // init BarcodeDetector if available (Safari 17+, Chrome)
+    if('BarcodeDetector' in window){
+      detector=new BarcodeDetector({
+        formats:['code_128','ean_13','ean_8','code_39','upc_a','upc_e','codabar','itf','qr_code','pdf417','data_matrix','aztec']
+      });
+      runBarcodeDetector();
+    } else {
+      // fallback: load ZXing dynamically
+      document.getElementById('scanner-status').textContent='Loading scanner…';
+      loadZXingFallback();
+    }
+  }catch(e){
+    let msg='Camera error.';
+    if(e.name==='NotAllowedError')msg='Camera permission denied. Go to Settings > Safari > Camera > Allow.';
+    else if(e.name==='NotFoundError')msg='No camera found.';
+    else if(e.name==='NotReadableError')msg='Camera in use by another app.';
+    else if(e.name==='OverconstrainedError'){
+      // retry without facingMode constraint
+      try{
+        videoStream=await navigator.mediaDevices.getUserMedia({video:true});
+        const video=document.getElementById('scanner-video');
+        video.srcObject=videoStream;
+        await video.play();
+        scannerRunning=true;
+        document.getElementById('scanner-status').textContent='Scanning…';
+        if('BarcodeDetector' in window){
+          detector=new BarcodeDetector({formats:['code_128','ean_13','ean_8','code_39','upc_a','upc_e','codabar','qr_code']});
+          runBarcodeDetector();
+        } else { loadZXingFallback(); }
+        return;
+      }catch(e2){msg='Camera error: '+e2.message;}
+    }
+    document.getElementById('scanner-status').textContent=msg;
+  }
+}
+
+function stopCamera(){
+  scannerRunning=false;
+  if(scanLoop){cancelAnimationFrame(scanLoop);scanLoop=null;}
+  if(videoStream){videoStream.getTracks().forEach(t=>t.stop());videoStream=null;}
+  detector=null;
+}
+
+async function runBarcodeDetector(){
+  if(!scannerRunning)return;
+  const video=document.getElementById('scanner-video');
+  if(video.readyState===video.HAVE_ENOUGH_DATA){
+    try{
+      const barcodes=await detector.detect(video);
+      if(barcodes&&barcodes.length>0){
+        onScanSuccess(barcodes[0].rawValue);
+        return;
+      }
+    }catch(e){}
+  }
+  if(scannerRunning){
+    scanLoop=requestAnimationFrame(runBarcodeDetector);
+  }
+}
+
+function loadZXingFallback(){
+  const s=document.createElement('script');
+  s.src='https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js';
+  s.onload=()=>{
+    if(!scannerRunning)return;
+    document.getElementById('scanner-status').textContent='Scanning…';
+    startZXing();
+  };
+  s.onerror=()=>{
+    document.getElementById('scanner-status').textContent='Scanner unavailable. Type number manually.';
+  };
+  document.head.appendChild(s);
+}
+
+function startZXing(){
+  if(!window.ZXing||!scannerRunning)return;
+  try{
+    const hints=new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
+      ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODABAR,ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.QR_CODE,
+    ]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+    const reader=new ZXing.BrowserMultiFormatReader(hints,300);
+    const video=document.getElementById('scanner-video');
+    const canvas=document.getElementById('scanner-canvas');
+    const ctx=canvas.getContext('2d');
+
+    function tick(){
+      if(!scannerRunning)return;
+      if(video.readyState===video.HAVE_ENOUGH_DATA){
+        canvas.width=video.videoWidth;
+        canvas.height=video.videoHeight;
+        ctx.drawImage(video,0,0);
+        try{
+          const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+          const lum=new ZXing.RGBLuminanceSource(imgData.data,canvas.width,canvas.height);
+          const bmp=new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+          const result=reader.decodeBitmap(bmp);
+          if(result){onScanSuccess(result.getText());return;}
+        }catch(e){}
+      }
+      scanLoop=requestAnimationFrame(tick);
+    }
+    tick();
+  }catch(e){
+    document.getElementById('scanner-status').textContent='Scanner error. Type number manually.';
+  }
+}
+
+function onScanSuccess(code){
+  if(!code)return;
+  scannerRunning=false;
+  if(scanLoop){cancelAnimationFrame(scanLoop);scanLoop=null;}
+  const flash=document.getElementById('scan-flash');
+  flash.classList.add('flash');
+  setTimeout(()=>flash.classList.remove('flash'),300);
+  document.getElementById('scanner-status').textContent='Got it!';
+  setTimeout(()=>{
+    stopCamera();
+    document.getElementById('scanner-screen').classList.remove('active');
+    document.getElementById('inp-num').value=code;
+    updatePreview();
+    showToast('Barcode scanned!');
+    if(!document.getElementById('inp-name').value.trim()){
+      setTimeout(()=>document.getElementById('inp-name').focus(),200);
+    }
+  },450);
+}
+
+/* ---- BARCODE VIEWER ---- */
+function openBarcode(i){
+  const c=cards[i];
+  document.getElementById('bc-name').textContent=c.name;
+  document.getElementById('bc-num').textContent=formatNum(c.number);
+  setTimeout(()=>{
+    try{
+      JsBarcode('#barcode-svg',c.number,{
+        format:'CODE128',width:2.2,height:80,
+        displayValue:false,margin:0,
+        lineColor:'#1a1a1a',background:'#ffffff',
+      });
+    }catch(e){
+      document.getElementById('barcode-svg').innerHTML=`<text x="50%" y="50%" text-anchor="middle" fill="#999" font-size="13">Cannot render barcode</text>`;
+    }
+  },50);
+  document.getElementById('barcode-screen').classList.add('active');
+}
+function hideBarcode(){document.getElementById('barcode-screen').classList.remove('active');}
+
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+renderCards();buildColorPicker();updatePreview();
+</script>
+</body>
+</html>
